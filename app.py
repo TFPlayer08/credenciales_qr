@@ -102,7 +102,10 @@ def index():
         sql += " AND estado=%s"
         p.append(estado)
     rows = query(sql + " ORDER BY numero_trabajador", p)
-    return render_template("index.html", rows=rows, q=q, estado=estado)
+    stats = {"Vigente": 0, "Inactiva": 0, "Vencida": 0, "No vigente": 0}
+    for s in query("SELECT estado, COUNT(*) n FROM v_credenciales GROUP BY estado"):
+        stats[s["estado"]] = s["n"]
+    return render_template("index.html", rows=rows, q=q, estado=estado, stats=stats, total=sum(stats.values()))
 
 
 def _guardar_foto():

@@ -1,25 +1,29 @@
 <div class="id-pair">
   <div class="id-card front">
-    <div class="id-head">{{ INSTITUCION }}</div>
+    <div class="id-head">
+      <span class="id-logo">🪪</span>
+      <span class="id-inst">{{ INSTITUCION }}</span>
+    </div>
     <div class="id-body">
       {% if c.foto_path %}<img class="id-photo" src="{{ url_for('static', filename='uploads/' ~ c.foto_path) }}" alt="">
       {% else %}<div class="id-photo ph">{{ c.nombre_completo[0] }}</div>{% endif %}
-      <div>
+      <div class="id-data">
         <div class="id-name">{{ c.nombre_completo }}</div>
         <div class="id-num">Nº {{ c.numero_trabajador }}</div>
-        <div class="id-small">{{ c.area }}<br>{{ c.cargo }}</div>
+        <div class="id-small"><b>{{ c.cargo }}</b><br>{{ c.area }}</div>
       </div>
     </div>
+    <div class="id-stripe"></div>
   </div>
   <div class="id-card back">
     <div class="id-body back-body">
       <img class="id-qr" src="{{ url_for('qr_img', token=c.qr_token) }}" alt="QR">
       <div class="id-small">
-        <b>Tarjeta:</b> {{ c.numero_tarjeta }}<br>
-        <b>Vence:</b> {{ c.fecha_vencimiento }}<br>
-        <span class="muted">Escanee el QR para verificar la vigencia.</span>
+        <span class="lbl">Tarjeta</span><b>{{ c.numero_tarjeta }}</b>
+        <span class="lbl">Vence</span><b>{{ c.fecha_vencimiento }}</b>
+        <span class="hint">Escanee el QR para verificar la vigencia de esta credencial.</span>
       </div>
     </div>
-    <div class="id-foot">{{ INSTITUCION }} · Esta credencial es personal e intransferible</div>
+    <div class="id-foot">{{ INSTITUCION }} · Credencial personal e intransferible</div>
   </div>
 </div>

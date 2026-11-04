@@ -1,12 +1,26 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="head">
-  <h1>Trabajadores <small>({{ rows|length }})</small></h1>
-  <a class="btn primary" href="{{ url_for('nuevo') }}">+ Nuevo trabajador</a>
+<div class="page-head">
+  <div>
+    <h1>Trabajadores</h1>
+    <p class="muted">Administra las credenciales y consulta su vigencia</p>
+  </div>
+  <a class="btn primary" href="{{ url_for('nuevo') }}">＋ Nuevo trabajador</a>
 </div>
+
+<section class="stats">
+  <a class="stat total" href="{{ url_for('index') }}"><span class="n">{{ total }}</span><span class="l">Total</span></a>
+  <a class="stat vigente" href="{{ url_for('index', estado='Vigente') }}"><span class="n">{{ stats['Vigente'] }}</span><span class="l">Vigentes</span></a>
+  <a class="stat vencida" href="{{ url_for('index', estado='Vencida') }}"><span class="n">{{ stats['Vencida'] }}</span><span class="l">Vencidas</span></a>
+  <a class="stat inactiva" href="{{ url_for('index', estado='Inactiva') }}"><span class="n">{{ stats['Inactiva'] }}</span><span class="l">Inactivas</span></a>
+</section>
+
 <form class="filters" method="get">
-  <input type="search" name="q" value="{{ q }}" placeholder="Buscar nombre, nº trabajador o tarjeta">
-  <select name="estado">
+  <div class="search">
+    <span>🔍</span>
+    <input type="search" name="q" value="{{ q }}" placeholder="Buscar por nombre, nº de trabajador o tarjeta">
+  </div>
+  <select name="estado" onchange="this.form.submit()">
     <option value="">Todos los estados</option>
     {% for e in ['Vigente','Inactiva','Vencida','No vigente'] %}
       <option {{ 'selected' if e == estado }}>{{ e }}</option>
@@ -18,25 +32,30 @@
 <div class="grid">
 {% for r in rows %}
   <article class="card worker">
-    {% if r.foto_path %}<img class="avatar" src="{{ url_for('static', filename='uploads/' ~ r.foto_path) }}" alt="">
-    {% else %}<div class="avatar ph">{{ r.nombre_completo[0] }}</div>{% endif %}
-    <div class="info">
-      <h3>{{ r.nombre_completo }}</h3>
-      <p class="muted">{{ r.numero_trabajador }} · {{ r.numero_tarjeta }}</p>
-      <p>{{ r.area }} — {{ r.cargo }}</p>
-      <p class="muted">Vence: {{ r.fecha_vencimiento }}</p>
+    <div class="worker-top">
+      {% if r.foto_path %}<img class="avatar" src="{{ url_for('static', filename='uploads/' ~ r.foto_path) }}" alt="">
+      {% else %}<div class="avatar ph">{{ r.nombre_completo[0] }}</div>{% endif %}
+      <div class="info">
+        <h3>{{ r.nombre_completo }}</h3>
+        <p class="role">{{ r.cargo }} · {{ r.area }}</p>
+      </div>
       <span class="badge {{ r.estado|replace(' ','-')|lower }}">{{ r.estado }}</span>
     </div>
+    <dl class="meta">
+      <div><dt>Trabajador</dt><dd>{{ r.numero_trabajador }}</dd></div>
+      <div><dt>Tarjeta</dt><dd>{{ r.numero_tarjeta }}</dd></div>
+      <div><dt>Vence</dt><dd>{{ r.fecha_vencimiento }}</dd></div>
+    </dl>
     <div class="actions">
-      <a class="btn sm" href="{{ url_for('credencial', cid=r.id) }}">Credencial</a>
+      <a class="btn sm primary" href="{{ url_for('credencial', cid=r.id) }}">Ver credencial</a>
       <a class="btn sm" href="{{ url_for('editar', cid=r.id) }}">Editar</a>
       <form method="post" action="{{ url_for('toggle', cid=r.id) }}">
-        <button class="btn sm {{ 'danger' if r.activa else 'ok' }}">{{ 'Desactivar' if r.activa else 'Activar' }}</button>
+        <button class="btn sm {{ 'ghost-danger' if r.activa else 'ghost-ok' }}">{{ 'Desactivar' if r.activa else 'Activar' }}</button>
       </form>
     </div>
   </article>
 {% else %}
-  <p class="muted">Sin resultados.</p>
+  <div class="empty card"><div>🗂️</div><p>No se encontraron trabajadores.</p></div>
 {% endfor %}
 </div>
 {% endblock %}

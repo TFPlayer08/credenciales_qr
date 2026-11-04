@@ -1,25 +1,33 @@
 {% extends "base.html" %}
 {% block title %}Verificación{% endblock %}
+{% block bodyclass %}public{% endblock %}
 {% block content %}
-<section class="card verify">
+<div class="verify-wrap">
+  <div class="verify-brand">🪪 {{ INSTITUCION }}</div>
+  <section class="verify">
   {% if not c %}
-    <div class="status big notfound">✖ Credencial no encontrada</div>
-    <p class="muted">El código QR no corresponde a una credencial registrada.</p>
+    <div class="v-banner notfound"><span class="ico">✖</span><span>Credencial no encontrada</span></div>
+    <div class="v-body"><p class="muted">El código QR no corresponde a una credencial registrada.</p></div>
   {% else %}
-    <div class="status big {{ c.estado|replace(' ','-')|lower }}">
-      {{ '✔' if c.estado == 'Vigente' else '✖' }} {{ c.estado }}
+    <div class="v-banner {{ c.estado|replace(' ','-')|lower }}">
+      <span class="ico">{{ '✔' if c.estado == 'Vigente' else '✖' }}</span>
+      <span>Credencial {{ c.estado|lower }}</span>
     </div>
-    {% if c.foto_path %}<img class="avatar big" src="{{ url_for('static', filename='uploads/' ~ c.foto_path) }}" alt="">
-    {% else %}<div class="avatar big ph">{{ c.nombre_completo[0] }}</div>{% endif %}
-    <h2>{{ c.nombre_completo }}</h2>
-    <dl>
-      <dt>Nº de trabajador</dt><dd>{{ c.numero_trabajador }}</dd>
-      <dt>Área</dt><dd>{{ c.area }}</dd>
-      <dt>Cargo</dt><dd>{{ c.cargo }}</dd>
-      <dt>Nº de tarjeta</dt><dd>{{ c.numero_tarjeta }}</dd>
-      <dt>Vigencia</dt><dd>{{ c.fecha_inicio }} al {{ c.fecha_vencimiento }}</dd>
-      <dt>Estado</dt><dd>{{ c.estado }}</dd>
-    </dl>
+    <div class="v-body">
+      {% if c.foto_path %}<img class="avatar xl" src="{{ url_for('static', filename='uploads/' ~ c.foto_path) }}" alt="">
+      {% else %}<div class="avatar xl ph">{{ c.nombre_completo[0] }}</div>{% endif %}
+      <h2>{{ c.nombre_completo }}</h2>
+      <p class="role">{{ c.cargo }}</p>
+      <dl class="v-list">
+        <div><dt>Nº de trabajador</dt><dd>{{ c.numero_trabajador }}</dd></div>
+        <div><dt>Área</dt><dd>{{ c.area }}</dd></div>
+        <div><dt>Nº de tarjeta</dt><dd>{{ c.numero_tarjeta }}</dd></div>
+        <div><dt>Vigencia</dt><dd>{{ c.fecha_inicio }} al {{ c.fecha_vencimiento }}</dd></div>
+        <div><dt>Estado</dt><dd><span class="badge {{ c.estado|replace(' ','-')|lower }}">{{ c.estado }}</span></dd></div>
+      </dl>
+    </div>
   {% endif %}
-</section>
+  </section>
+  <p class="verify-foot">Verificación oficial · {{ INSTITUCION }}</p>
+</div>
 {% endblock %}

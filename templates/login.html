@@ -1,11 +1,24 @@
 {% extends "base.html" %}
 {% block title %}Acceso{% endblock %}
+{% block bodyclass %}auth{% endblock %}
 {% block content %}
-<form method="post" class="card login">
-  <h1>🪪 {{ INSTITUCION }}</h1>
-  <p class="muted">Acceso administrativo</p>
-  <label>Correo<input type="email" name="email" required autofocus></label>
-  <label>Contraseña<input type="password" name="password" required></label>
-  <button class="btn primary" type="submit">Entrar</button>
-</form>
+<div class="auth-wrap">
+  <section class="auth-hero">
+    <div class="hero-logo">🪪</div>
+    <h1>{{ INSTITUCION }}</h1>
+    <p>Sistema de credencialización digital con verificación mediante código QR.</p>
+    <ul>
+      <li>✓ Credenciales con foto y QR único</li>
+      <li>✓ Verificación en tiempo real desde el celular</li>
+      <li>✓ Control de vigencias y estados</li>
+    </ul>
+  </section>
+  <form method="post" class="auth-form">
+    <h2>Bienvenido</h2>
+    <p class="muted">Ingresa para administrar las credenciales</p>
+    <label>Correo electrónico<input type="email" name="email" placeholder="admin@empresa.com" required autofocus></label>
+    <label>Contraseña<input type="password" name="password" placeholder="••••••••" required></label>
+    <button class="btn primary lg" type="submit">Entrar</button>
+  </form>
+</div>
 {% endblock %}

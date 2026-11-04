@@ -1,8 +1,11 @@
 {% extends "base.html" %}
 {% block title %}Imprimir credenciales{% endblock %}
 {% block content %}
-<div class="head no-print">
-  <h1>Imprimir todas</h1>
+<div class="page-head no-print">
+  <div>
+    <h1>Imprimir todas</h1>
+    <p class="muted">{{ rows|length }} credenciales · formato horizontal, anverso y reverso</p>
+  </div>
   <button class="btn primary" onclick="window.print()">🖨 Imprimir</button>
 </div>
 {% for c in rows %}{% include "_card.html" %}{% endfor %}

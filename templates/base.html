@@ -3,25 +3,31 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#4f46e5">
   <title>{% block title %}Credenciales{% endblock %} · {{ INSTITUCION }}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body class="{% block bodyclass %}{% endblock %}">
 {% if session.uid %}
 <header class="topbar no-print">
-  <a class="brand" href="{{ url_for('index') }}">🪪 {{ INSTITUCION }}</a>
-  <button class="burger" id="burger" aria-label="Menú">☰</button>
-  <nav id="nav">
-    <a href="{{ url_for('index') }}">Trabajadores</a>
-    <a href="{{ url_for('nuevo') }}">Nuevo</a>
-    <a href="{{ url_for('imprimir') }}">Imprimir todas</a>
-    <a href="{{ url_for('logout') }}">Salir</a>
-  </nav>
+  <div class="topbar-in">
+    <a class="brand" href="{{ url_for('index') }}"><span class="logo">🪪</span><span>{{ INSTITUCION }}</span></a>
+    <button class="burger" id="burger" aria-label="Menú">☰</button>
+    <nav id="nav">
+      <a href="{{ url_for('index') }}" class="{{ 'active' if request.endpoint == 'index' }}">Trabajadores</a>
+      <a href="{{ url_for('nuevo') }}" class="{{ 'active' if request.endpoint == 'nuevo' }}">Nuevo</a>
+      <a href="{{ url_for('imprimir') }}" class="{{ 'active' if request.endpoint == 'imprimir' }}">Imprimir todas</a>
+      <a href="{{ url_for('logout') }}" class="logout">Salir</a>
+    </nav>
+  </div>
 </header>
 {% endif %}
 <main class="container">
   {% for cat, msg in get_flashed_messages(with_categories=true) %}
-    <div class="flash {{ cat }} no-print">{{ msg }}</div>
+    <div class="flash {{ cat }} no-print">{{ '✓' if cat == 'ok' else '!' }} {{ msg }}</div>
   {% endfor %}
   {% block content %}{% endblock %}
 </main>
