@@ -4,7 +4,7 @@ Flask + MySQL + HTML/CSS/JS responsivo.
 
 ## Instalación
 1. `pip install -r requirements.txt`
-2. Copia `.env.example` a `.env` y completa tus datos de MySQL.
+2. Crea un archivo `.env` con DB_HOST, DB_USER, DB_PASSWORD, DB_NAME, SECRET_KEY, INSTITUCION, BASE_URL (y SMTP_* opcional).
 3. `python init_db.py` (crea la BD, un admin `admin@empresa.com` / `Admin123!` y 10 trabajadores de prueba)
 4. `python app.py` y abre http://localhost:5000
 
