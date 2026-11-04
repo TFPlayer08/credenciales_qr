@@ -3,7 +3,7 @@ import os
 import re
 import smtplib
 import uuid
-from datetime import date
+from datetime import date, datetime
 from email.message import EmailMessage
 from functools import wraps
 
@@ -25,10 +25,31 @@ UPLOADS = os.path.join(app.root_path, "static", "uploads")
 EXT = {"png", "jpg", "jpeg", "webp"}
 CURP_RE = re.compile(r"^[A-Z0-9]{18}$")
 
+ETIQUETAS_NOTIF = {
+    "generada": "Creación de credencial",
+    "desactivada": "Desactivación de credencial",
+    "vencimiento_modificado": "Cambio de fecha de vencimiento",
+}
+
 
 @app.context_processor
 def inject():
-    return {"INSTITUCION": os.getenv("INSTITUCION", "Institución")}
+    rol, email_usr = session.get("rol"), session.get("email")
+    if "uid" in session and (not rol or not email_usr):
+        u = query("SELECT email, rol FROM usuarios WHERE id=%s", (session["uid"],), one=True)
+        if u:
+            rol = session["rol"] = u.get("rol", "admin")
+            email_usr = session["email"] = u["email"]
+    return {
+        "INSTITUCION": os.getenv("INSTITUCION", "NovaTech"),
+        "ROL": rol or "admin",
+        "USER_EMAIL": email_usr or "",
+    }
+
+
+@app.template_filter("fecha")
+def fecha(v):
+    return v.strftime("%d/%m/%Y") if hasattr(v, "strftime") else v
 
 
 def login_required(f):
@@ -40,34 +61,102 @@ def login_required(f):
     return wrapper
 
 
-# ---------- Correo / notificaciones ----------
+def admin_required(f):
+    @wraps(f)
+    def wrapper(*a, **kw):
+        if "uid" not in session:
+            return redirect(url_for("login", next=request.path))
+        u = query("SELECT email, rol FROM usuarios WHERE id=%s", (session["uid"],), one=True)
+        rol = u.get("rol", "admin") if u else "consulta"
+        session["rol"] = rol
+        if rol != "admin":
+            flash(
+                f"Acceso denegado: la cuenta ({u['email'] if u else 'actual'}) es de solo consulta y no tiene permisos para registrar, modificar ni desactivar trabajadores.",
+                "error",
+            )
+            return redirect(request.referrer or url_for("index"))
+        return f(*a, **kw)
+    return wrapper
+
+
+# ---------- Envío automático al correo personal del trabajador ----------
 def notificar(cred_id, tipo):
+    load_dotenv(override=True)
     c = query("SELECT * FROM v_credenciales WHERE id=%s", (cred_id,), one=True)
-    if not c:
+    if not c or not c["email"]:
         return
-    etiquetas = {"generada": "Nueva credencial generada",
-                 "desactivada": "Credencial desactivada",
-                 "vencimiento_modificado": "Fecha de vencimiento modificada"}
-    cuerpo = (f"Nombre: {c['nombre_completo']}\nNúmero de trabajador: {c['numero_trabajador']}\n"
-              f"Número de tarjeta: {c['numero_tarjeta']}\nTipo de notificación: {etiquetas[tipo]}\n"
-              f"Vigencia: {c['fecha_inicio']} al {c['fecha_vencimiento']}\nEstado actualizado: {c['estado']}\n")
-    host = os.getenv("SMTP_HOST")
-    if c["email"] and host:
+
+    inst = os.getenv("INSTITUCION", "NovaTech")
+    tipo_txt = ETIQUETAS_NOTIF[tipo]
+    vigencia = f"{fecha(c['fecha_inicio'])} al {fecha(c['fecha_vencimiento'])}"
+    asunto = f"[{inst}] {tipo_txt} · {c['numero_trabajador']}"
+
+    cuerpo_txt = (
+        f"Nombre del trabajador: {c['nombre_completo']}\n"
+        f"N° de trabajador: {c['numero_trabajador']}\n"
+        f"N° de tarjeta: {c['numero_tarjeta']}\n"
+        f"Tipo de notificación: {tipo_txt}\n"
+        f"Vigencia de la credencial: {vigencia}\n"
+        f"Estado actualizado: {c['estado']}\n"
+    )
+
+    cuerpo_html = f"""
+    <div style="font-family:Segoe UI,Arial,sans-serif;max-width:540px;margin:0 auto;border:1px solid #e8e9f3;border-radius:14px;overflow:hidden">
+      <div style="background:#221b45;color:#fff;padding:18px 24px;border-bottom:4px solid #e5287d">
+        <h2 style="margin:0;font-size:20px">{inst} · Notificación de Credencial</h2>
+      </div>
+      <div style="padding:24px;color:#1e1b3a">
+        <p style="margin-top:0">Hola <b>{c['nombre_completo']}</b>, se ha registrado una actualización en tu credencial:</p>
+        <table style="width:100%;border-collapse:collapse;background:#f4f5fb;border-radius:10px;padding:12px">
+          <tr><td style="padding:10px 14px;color:#6b6f8d">Nombre del trabajador</td><td style="padding:10px 14px;font-weight:600">{c['nombre_completo']}</td></tr>
+          <tr><td style="padding:10px 14px;color:#6b6f8d;border-top:1px solid #e8e9f3">N° de trabajador</td><td style="padding:10px 14px;font-weight:600;border-top:1px solid #e8e9f3">{c['numero_trabajador']}</td></tr>
+          <tr><td style="padding:10px 14px;color:#6b6f8d;border-top:1px solid #e8e9f3">N° de tarjeta</td><td style="padding:10px 14px;font-weight:600;border-top:1px solid #e8e9f3">{c['numero_tarjeta']}</td></tr>
+          <tr><td style="padding:10px 14px;color:#6b6f8d;border-top:1px solid #e8e9f3">Tipo de notificación</td><td style="padding:10px 14px;font-weight:600;border-top:1px solid #e8e9f3">{tipo_txt}</td></tr>
+          <tr><td style="padding:10px 14px;color:#6b6f8d;border-top:1px solid #e8e9f3">Vigencia de la credencial</td><td style="padding:10px 14px;font-weight:600;border-top:1px solid #e8e9f3">{vigencia}</td></tr>
+          <tr><td style="padding:10px 14px;color:#6b6f8d;border-top:1px solid #e8e9f3">Estado actualizado</td><td style="padding:10px 14px;font-weight:700;color:#e5287d;border-top:1px solid #e8e9f3">{c['estado']}</td></tr>
+        </table>
+      </div>
+    </div>
+    """
+
+    host = os.getenv("SMTP_HOST", "").strip()
+    user = os.getenv("SMTP_USER", "").strip()
+    pwd = os.getenv("SMTP_PASSWORD", "").strip().replace(" ", "")
+    port = int(os.getenv("SMTP_PORT") or 587)
+
+    if host and user and pwd:
         try:
             msg = EmailMessage()
-            msg["Subject"], msg["To"] = etiquetas[tipo], c["email"]
-            msg["From"] = os.getenv("SMTP_USER")
-            msg.set_content(cuerpo)
-            with smtplib.SMTP(host, int(os.getenv("SMTP_PORT", 587))) as s:
-                s.starttls()
-                s.login(os.getenv("SMTP_USER"), os.getenv("SMTP_PASSWORD"))
-                s.send_message(msg)
+            msg["Subject"] = asunto
+            msg["To"] = c["email"]
+            msg["From"] = f"{inst} <{user}>"
+            msg.set_content(cuerpo_txt)
+            msg.add_alternative(cuerpo_html, subtype="html")
+            if port == 465:
+                with smtplib.SMTP_SSL(host, port) as s:
+                    s.login(user, pwd)
+                    s.send_message(msg)
+            else:
+                with smtplib.SMTP(host, port) as s:
+                    s.starttls()
+                    s.login(user, pwd)
+                    s.send_message(msg)
+            flash(f"Notificación enviada al correo {c['email']}", "ok")
         except Exception as e:
             print("Error enviando correo:", e)
+            flash(f"No se pudo enviar el correo a {c['email']}: {e}", "error")
     else:
-        print(f"[CORREO SIMULADO a {c['email']}]\n{cuerpo}")
-    query("INSERT INTO notificaciones (credencial_id,tipo,enviada_a) VALUES (%s,%s,%s)",
-          (cred_id, tipo, c["email"]), commit=True)
+        flash(f"Falta configurar el correo emisor de {inst} en .env (SMTP_HOST/USER/PASSWORD) para entregar a {c['email']}", "error")
+
+    query(
+        """INSERT INTO notificaciones
+           (credencial_id, tipo, enviada_a, asunto, nombre_completo, numero_trabajador,
+            numero_tarjeta, vigencia, estado_actualizado, cuerpo)
+           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+        (cred_id, tipo, c["email"], asunto, c["nombre_completo"], c["numero_trabajador"],
+         c["numero_tarjeta"], vigencia, c["estado"], cuerpo_txt),
+        commit=True,
+    )
 
 
 # ---------- Auth ----------
@@ -77,6 +166,8 @@ def login():
         u = query("SELECT * FROM usuarios WHERE email=%s", (request.form["email"],), one=True)
         if u and check_password_hash(u["password_hash"], request.form["password"]):
             session["uid"] = u["id"]
+            session["email"] = u["email"]
+            session["rol"] = u.get("rol", "admin")
             return redirect(request.args.get("next") or url_for("index"))
         flash("Credenciales incorrectas", "error")
     return render_template("login.html")
@@ -137,7 +228,7 @@ def _siguiente_numero():
 
 
 @app.route("/trabajadores/nuevo", methods=["GET", "POST"])
-@login_required
+@admin_required
 def nuevo():
     if request.method == "POST":
         f = request.form
@@ -149,7 +240,7 @@ def nuevo():
                    foto_path,email,emergencia_nombre,emergencia_telefono)
                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
                 (f["numero_trabajador"].strip() or _siguiente_numero(), f["nombre_completo"], f["edad"],
-                 f["sexo"], curp, f["area"], f["cargo"], foto, f["email"] or None,
+                 f["sexo"], curp, f["area"], f["cargo"], foto, f["email"].strip() or None,
                  f["emergencia_nombre"], f["emergencia_telefono"]), commit=True)
             cid = query(
                 """INSERT INTO credenciales (trabajador_id,numero_tarjeta,qr_token,fecha_inicio,fecha_vencimiento)
@@ -168,7 +259,7 @@ def nuevo():
 
 
 @app.route("/credenciales/<int:cid>/editar", methods=["GET", "POST"])
-@login_required
+@admin_required
 def editar(cid):
     c = query("SELECT * FROM v_credenciales WHERE id=%s", (cid,), one=True) or abort(404)
     w = query("SELECT * FROM trabajadores WHERE id=%s", (c["trabajador_id"],), one=True)
@@ -181,7 +272,7 @@ def editar(cid):
                 """UPDATE trabajadores SET nombre_completo=%s,edad=%s,sexo=%s,curp=%s,area=%s,cargo=%s,
                    foto_path=%s,email=%s,emergencia_nombre=%s,emergencia_telefono=%s WHERE id=%s""",
                 (f["nombre_completo"], f["edad"], f["sexo"], curp, f["area"], f["cargo"], foto,
-                 f["email"] or None, f["emergencia_nombre"], f["emergencia_telefono"], w["id"]), commit=True)
+                 f["email"].strip() or None, f["emergencia_nombre"], f["emergencia_telefono"], w["id"]), commit=True)
             query("UPDATE credenciales SET numero_tarjeta=%s,fecha_inicio=%s,fecha_vencimiento=%s WHERE id=%s",
                   (f["numero_tarjeta"].strip(), f["fecha_inicio"], f["fecha_vencimiento"], cid), commit=True)
             if str(c["fecha_vencimiento"]) != f["fecha_vencimiento"]:
@@ -196,7 +287,7 @@ def editar(cid):
 
 
 @app.route("/credenciales/<int:cid>/toggle", methods=["POST"])
-@login_required
+@admin_required
 def toggle(cid):
     c = query("SELECT activa FROM credenciales WHERE id=%s", (cid,), one=True) or abort(404)
     nuevo = not c["activa"]
@@ -211,16 +302,128 @@ def toggle(cid):
 @login_required
 def credencial(cid):
     c = query("SELECT * FROM v_credenciales WHERE id=%s", (cid,), one=True) or abort(404)
-    t = query("SELECT curp,edad,sexo,emergencia_nombre,emergencia_telefono FROM trabajadores WHERE id=%s",
+    t = query("SELECT curp,edad,sexo,email,emergencia_nombre,emergencia_telefono FROM trabajadores WHERE id=%s",
               (c["trabajador_id"],), one=True)
     return render_template("credencial.html", c=c, t=t,
                            url_qr=os.getenv("BASE_URL", request.host_url.rstrip("/")) + "/verificar/" + c["qr_token"])
 
 
+@app.route("/credenciales/<int:cid>/pdf")
+@login_required
+def credencial_pdf(cid):
+    from reporte_pdf import construir_credenciales_pdf
+    c = query("SELECT * FROM v_credenciales WHERE id=%s", (cid,), one=True) or abort(404)
+    pdf = construir_credenciales_pdf(
+        [c],
+        os.path.join(app.root_path, "static", "img", "logo.png"),
+        os.path.join(app.root_path, "static", "img", "logo-icon.png"),
+        UPLOADS,
+        os.getenv("BASE_URL", request.host_url.rstrip("/")),
+        os.getenv("INSTITUCION", "NovaTech"),
+        subtitulo=f"{c['nombre_completo']} ({c['numero_trabajador']})",
+    )
+    return send_file(io.BytesIO(pdf), mimetype="application/pdf",
+                     download_name=f"credencial_{c['numero_trabajador']}.pdf")
+
+
+def _filtrar_credenciales(q, estado):
+    sql, p = "SELECT * FROM v_credenciales WHERE 1=1", []
+    if q:
+        sql += " AND (nombre_completo LIKE %s OR numero_trabajador LIKE %s OR numero_tarjeta LIKE %s)"
+        p += [f"%{q}%"] * 3
+    if estado:
+        sql += " AND estado=%s"
+        p.append(estado)
+    return query(sql + " ORDER BY numero_trabajador", p)
+
+
 @app.route("/imprimir")
 @login_required
 def imprimir():
-    return render_template("imprimir.html", rows=query("SELECT * FROM v_credenciales ORDER BY numero_trabajador"))
+    q = request.args.get("q", "").strip()
+    estado = request.args.get("estado", "")
+    return render_template("imprimir.html", rows=_filtrar_credenciales(q, estado), q=q, estado=estado)
+
+
+@app.route("/imprimir/pdf")
+@login_required
+def imprimir_pdf():
+    from reporte_pdf import construir_credenciales_pdf
+    q = request.args.get("q", "").strip()
+    estado = request.args.get("estado", "")
+    rows = _filtrar_credenciales(q, estado)
+    partes = []
+    if estado:
+        partes.append(f"Estado: {estado}")
+    if q:
+        partes.append(f"Búsqueda: {q}")
+    sub = " · ".join(partes) if partes else "Todas las credenciales registradas"
+    pdf = construir_credenciales_pdf(
+        rows,
+        os.path.join(app.root_path, "static", "img", "logo.png"),
+        os.path.join(app.root_path, "static", "img", "logo-icon.png"),
+        UPLOADS,
+        os.getenv("BASE_URL", request.host_url.rstrip("/")),
+        os.getenv("INSTITUCION", "NovaTech"),
+        subtitulo=sub,
+    )
+    return send_file(io.BytesIO(pdf), mimetype="application/pdf",
+                     download_name=f"credenciales_{datetime.now():%Y%m%d_%H%M}.pdf")
+
+
+# ---------- Reportes ----------
+def _datos_reporte(tipo, area, estado):
+    sql, p = "SELECT * FROM v_credenciales WHERE 1=1", []
+    if tipo == "area" and area:
+        sql += " AND area=%s"
+        p.append(area)
+    if tipo == "estado" and estado:
+        sql += " AND estado=%s"
+        p.append(estado)
+    q = request.args.get("q", "").strip()
+    if q:
+        sql += " AND nombre_completo LIKE %s"
+        p.append(f"%{q}%")
+    rows = query(sql + " ORDER BY area, nombre_completo", p)
+    resumen = {}
+    for r in rows:
+        resumen[r["estado"]] = resumen.get(r["estado"], 0) + 1
+    return rows, resumen
+
+
+@app.route("/reportes/pdf")
+@login_required
+def reportes_pdf():
+    from reporte_pdf import construir_pdf
+    tipo = request.args.get("tipo", "general")
+    area = request.args.get("area", "")
+    estado = request.args.get("estado", "")
+    rows, resumen = _datos_reporte(tipo, area, estado)
+    titulos = {"general": "Reporte general de credenciales",
+               "area": "Reporte por área de adscripción",
+               "estado": "Reporte por estado de credencial"}
+    filtro = {"general": "Todos los trabajadores registrados",
+              "area": f"Área: {area}" if area else "Todas las áreas",
+              "estado": f"Estado: {estado}" if estado else "Todos los estados"}.get(tipo, "")
+    if request.args.get("q", "").strip():
+        filtro += " · Nombre: " + request.args.get("q").strip()
+    pdf = construir_pdf(titulos.get(tipo, titulos["general"]), filtro, rows, resumen,
+                        os.path.join(app.root_path, "static", "img", "logo.png"),
+                        os.getenv("INSTITUCION", "NovaTech"))
+    nombre = f"reporte_{tipo}_{datetime.now():%Y%m%d_%H%M}.pdf"
+    return send_file(io.BytesIO(pdf), mimetype="application/pdf", download_name=nombre)
+
+
+@app.route("/reportes")
+@login_required
+def reportes():
+    tipo = request.args.get("tipo", "general")
+    area = request.args.get("area", "")
+    estado = request.args.get("estado", "")
+    areas = [r["area"] for r in query("SELECT DISTINCT area FROM trabajadores ORDER BY area")]
+    rows, resumen = _datos_reporte(tipo, area, estado)
+    return render_template("reportes.html", rows=rows, tipo=tipo, area=area, estado=estado,
+                           areas=areas, resumen=resumen, ahora=datetime.now())
 
 
 # ---------- Público ----------

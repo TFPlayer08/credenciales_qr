@@ -3,7 +3,7 @@
 {% block bodyclass %}public{% endblock %}
 {% block content %}
 <div class="verify-wrap">
-  <div class="verify-brand">🪪 {{ INSTITUCION }}</div>
+  <div class="verify-brand"><img src="{{ url_for('static', filename='img/logo.png') }}" alt="{{ INSTITUCION }}"></div>
   <section class="verify">
   {% if not c %}
     <div class="v-banner notfound"><span class="ico">✖</span><span>Credencial no encontrada</span></div>

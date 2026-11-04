@@ -20,7 +20,7 @@
         </select>
       </label>
       <label>CURP<input name="curp" maxlength="18" minlength="18" value="{{ w.curp }}" style="text-transform:uppercase" required></label>
-      <label>Correo electrónico<input type="email" name="email" value="{{ w.email or '' }}"></label>
+      <label>Correo electrónico<input type="email" name="email" value="{{ w.email or '' }}" placeholder="trabajador@correo.com" required></label>
     </div>
     <div class="photo-up">
       <img id="preview" class="avatar big" {% if w.foto_path %}src="{{ url_for('static', filename='uploads/' ~ w.foto_path) }}"{% else %}hidden{% endif %} alt="">

@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
   id INT AUTO_INCREMENT PRIMARY KEY,
   email VARCHAR(120) NOT NULL UNIQUE,
   password_hash VARCHAR(255) NOT NULL,
+  rol ENUM('admin','consulta') NOT NULL DEFAULT 'admin',
   creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -47,6 +48,13 @@ CREATE TABLE IF NOT EXISTS notificaciones (
   credencial_id INT NOT NULL,
   tipo ENUM('generada','desactivada','vencimiento_modificado') NOT NULL,
   enviada_a VARCHAR(120),
+  asunto VARCHAR(180),
+  nombre_completo VARCHAR(150),
+  numero_trabajador VARCHAR(20),
+  numero_tarjeta VARCHAR(30),
+  vigencia VARCHAR(60),
+  estado_actualizado VARCHAR(30),
+  cuerpo TEXT,
   enviada_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (credencial_id) REFERENCES credenciales(id) ON DELETE CASCADE
 );

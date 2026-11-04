@@ -8,7 +8,8 @@
   </div>
   <div class="row">
     <a class="btn" href="{{ url_for('index') }}">← Volver</a>
-    <button class="btn primary" onclick="window.print()">🖨 Imprimir</button>
+    <a class="btn" href="{{ url_for('editar', cid=c.id) }}">Editar</a>
+    <a class="btn primary" target="_blank" href="{{ url_for('credencial_pdf', cid=c.id) }}">📄 Ver / imprimir PDF</a>
   </div>
 </div>
 {% include "_card.html" %}
@@ -18,7 +19,8 @@
     <div><dt>Edad</dt><dd>{{ t.edad }}</dd></div>
     <div><dt>Sexo</dt><dd>{{ t.sexo }}</dd></div>
     <div><dt>CURP</dt><dd>{{ t.curp }}</dd></div>
-    <div><dt>Vigencia</dt><dd>{{ c.fecha_inicio }} → {{ c.fecha_vencimiento }}</dd></div>
+    <div><dt>Correo personal</dt><dd>{{ t.email or 'Sin correo' }}</dd></div>
+    <div><dt>Vigencia</dt><dd>{{ c.fecha_inicio|fecha }} → {{ c.fecha_vencimiento|fecha }}</dd></div>
     <div><dt>Contacto de emergencia</dt><dd>{{ t.emergencia_nombre }} · {{ t.emergencia_telefono }}</dd></div>
     <div class="wide"><dt>Enlace del QR</dt><dd><a href="{{ url_qr }}" target="_blank">{{ url_qr }}</a></dd></div>
   </dl>

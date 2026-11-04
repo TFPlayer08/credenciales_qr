@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Reportes{% endblock %}
+{% block content %}
+{% set titulos = {'general': 'Reporte general de credenciales', 'area': 'Reporte por área de adscripción', 'estado': 'Reporte por estado de credencial'} %}
+<div class="page-head no-print">
+  <div>
+    <h1>Reportes</h1>
+    <p class="muted">Consulta e imprime la información de credencialización</p>
+  </div>
+  <a class="btn primary" target="_blank" href="{{ url_for('reportes_pdf', tipo=tipo, area=area, estado=estado, q=request.args.get('q','')) }}">📄 Ver / imprimir PDF</a>
+</div>
+
+<div class="tabs no-print">
+  <a href="{{ url_for('reportes', tipo='general') }}" class="{{ 'on' if tipo == 'general' }}">General</a>
+  <a href="{{ url_for('reportes', tipo='area') }}" class="{{ 'on' if tipo == 'area' }}">Por área</a>
+  <a href="{{ url_for('reportes', tipo='estado') }}" class="{{ 'on' if tipo == 'estado' }}">Por estado</a>
+</div>
+
+{% if tipo == 'estado' %}
+<div class="chips-estado no-print">
+  <a class="btn sm {{ 'primary' if not estado }}" href="{{ url_for('reportes', tipo='estado', q=request.args.get('q','')) }}">Todos</a>
+  {% for e, lbl in [('Vigente','Vigentes'),('Inactiva','Inactivas'),('Vencida','Vencidas'),('No vigente','No vigentes')] %}
+    <a class="btn sm {{ 'primary' if estado == e }}" href="{{ url_for('reportes', tipo='estado', estado=e, q=request.args.get('q','')) }}">{{ lbl }}</a>
+  {% endfor %}
+</div>
+{% endif %}
+
+<form class="filters no-print" method="get">
+  <input type="hidden" name="tipo" value="{{ tipo }}">
+  {% if estado %}<input type="hidden" name="estado" value="{{ estado }}">{% endif %}
+  <div class="search">
+    <span>🔍</span>
+    <input type="search" name="q" value="{{ request.args.get('q','') }}" placeholder="Buscar credencial por nombre del trabajador">
+  </div>
+  {% if tipo == 'area' %}
+  <select name="area" onchange="this.form.submit()">
+    <option value="">Todas las áreas</option>
+    {% for a in areas %}<option {{ 'selected' if a == area }}>{{ a }}</option>{% endfor %}
+  </select>
+  {% endif %}
+  <button class="btn">Buscar</button>
+</form>
+
+<section class="card report">
+  <div class="report-head">
+    <img class="report-logo" src="{{ url_for('static', filename='img/logo.png') }}" alt="{{ INSTITUCION }}">
+    <div>
+      <h2>{{ titulos[tipo] }}</h2>
+      <p class="muted">
+        {% if tipo == 'area' and area %}Área: <b>{{ area }}</b> · {% endif %}
+        {% if tipo == 'estado' and estado %}Estado: <b>{{ estado }}</b> · {% endif %}
+        {% if request.args.get('q') %}Nombre: <b>{{ request.args.get('q') }}</b> · {% endif %}
+        Generado: {{ ahora.strftime('%d/%m/%Y %H:%M') }} · {{ rows|length }} registro(s)
+      </p>
+    </div>
+  </div>
+
+  <div class="chips">
+    {% for e, n in resumen.items() %}<span class="badge {{ e|replace(' ','-')|lower }}">{{ e }}: {{ n }}</span>{% endfor %}
+  </div>
+
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr><th>Trabajador</th><th>Núm. trabajador</th><th>Núm. de tarjeta</th><th>Área</th><th>Vigencia</th><th>Estado</th></tr>
+      </thead>
+      <tbody>
+      {% for r in rows %}
+        <tr>
+          <td data-l="Trabajador"><b>{{ r.nombre_completo }}</b></td>
+          <td data-l="Núm. trabajador">{{ r.numero_trabajador }}</td>
+          <td data-l="Núm. de tarjeta">{{ r.numero_tarjeta }}</td>
+          <td data-l="Área">{{ r.area }}</td>
+          <td data-l="Vigencia">{{ r.fecha_vencimiento|fecha }}</td>
+          <td data-l="Estado"><span class="badge {{ r.estado|replace(' ','-')|lower }}">{{ r.estado }}</span></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6" class="muted" style="text-align:center;padding:2rem">Sin resultados.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

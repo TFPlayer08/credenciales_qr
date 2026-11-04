@@ -1,7 +1,7 @@
 <div class="id-pair">
   <div class="id-card front">
     <div class="id-head">
-      <span class="id-logo">🪪</span>
+      <img class="id-logo" src="{{ url_for('static', filename='img/logo-icon.png') }}" alt="">
       <span class="id-inst">{{ INSTITUCION }}</span>
     </div>
     <div class="id-body">
@@ -20,7 +20,7 @@
       <img class="id-qr" src="{{ url_for('qr_img', token=c.qr_token) }}" alt="QR">
       <div class="id-small">
         <span class="lbl">Tarjeta</span><b>{{ c.numero_tarjeta }}</b>
-        <span class="lbl">Vence</span><b>{{ c.fecha_vencimiento }}</b>
+        <span class="lbl">Vence</span><b>{{ c.fecha_vencimiento|fecha }}</b>
         <span class="hint">Escanee el QR para verificar la vigencia de esta credencial.</span>
       </div>
     </div>

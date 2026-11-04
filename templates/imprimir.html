@@ -3,10 +3,35 @@
 {% block content %}
 <div class="page-head no-print">
   <div>
-    <h1>Imprimir todas</h1>
-    <p class="muted">{{ rows|length }} credenciales · formato horizontal, anverso y reverso</p>
+    <h1>Imprimir credenciales</h1>
+    <p class="muted">{{ rows|length }} credencial(es) · formato horizontal, anverso y reverso</p>
   </div>
-  <button class="btn primary" onclick="window.print()">🖨 Imprimir</button>
+  <a class="btn primary" target="_blank" href="{{ url_for('imprimir_pdf', q=q, estado=estado) }}">📄 Ver / imprimir PDF ({{ rows|length }})</a>
 </div>
-{% for c in rows %}{% include "_card.html" %}{% endfor %}
+
+<form class="filters no-print" method="get">
+  <div class="search">
+    <span>🔍</span>
+    <input type="search" name="q" value="{{ q }}" placeholder="Buscar credencial por nombre, nº de trabajador o tarjeta">
+  </div>
+  <select name="estado" onchange="this.form.submit()">
+    <option value="">Todos los estados</option>
+    {% for e in ['Vigente','Inactiva','Vencida','No vigente'] %}
+      <option {{ 'selected' if e == estado }}>{{ e }}</option>
+    {% endfor %}
+  </select>
+  <button class="btn">Buscar</button>
+</form>
+
+{% for c in rows %}
+  <div class="cred-item">
+    <div class="cred-bar no-print">
+      <span><b>{{ c.nombre_completo }}</b> · {{ c.numero_trabajador }} · <span class="badge {{ c.estado|replace(' ','-')|lower }}">{{ c.estado }}</span></span>
+      <a class="btn sm primary" target="_blank" href="{{ url_for('credencial_pdf', cid=c.id) }}">📄 PDF individual</a>
+    </div>
+    {% include "_card.html" %}
+  </div>
+{% else %}
+  <div class="empty card"><div>🪪</div><p>No se encontraron credenciales con ese criterio.</p></div>
+{% endfor %}
 {% endblock %}

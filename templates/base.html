@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#4f46e5">
+  <meta name="theme-color" content="#221b45">
+  <link rel="icon" href="{{ url_for('static', filename='img/logo-icon.png') }}">
   <title>{% block title %}Credenciales{% endblock %} · {{ INSTITUCION }}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,18 +15,27 @@
 {% if session.uid %}
 <header class="topbar no-print">
   <div class="topbar-in">
-    <a class="brand" href="{{ url_for('index') }}"><span class="logo">🪪</span><span>{{ INSTITUCION }}</span></a>
+    <a class="brand" href="{{ url_for('index') }}"><img class="logo" src="{{ url_for('static', filename='img/logo-icon.png') }}" alt=""><span>{{ INSTITUCION }}</span></a>
     <button class="burger" id="burger" aria-label="Menú">☰</button>
     <nav id="nav">
       <a href="{{ url_for('index') }}" class="{{ 'active' if request.endpoint == 'index' }}">Trabajadores</a>
       <a href="{{ url_for('nuevo') }}" class="{{ 'active' if request.endpoint == 'nuevo' }}">Nuevo</a>
-      <a href="{{ url_for('imprimir') }}" class="{{ 'active' if request.endpoint == 'imprimir' }}">Imprimir todas</a>
+      <a href="{{ url_for('reportes') }}" class="{{ 'active' if request.endpoint == 'reportes' }}">Reportes</a>
+      <a href="{{ url_for('imprimir') }}" class="{{ 'active' if request.endpoint == 'imprimir' }}">Imprimir credenciales</a>
+      <span class="role-pill {{ 'admin' if ROL == 'admin' else 'readonly' }}" title="{{ USER_EMAIL }}">
+        {{ '🛡️ Admin' if ROL == 'admin' else '🔒 Solo consulta' }}
+      </span>
       <a href="{{ url_for('logout') }}" class="logout">Salir</a>
     </nav>
   </div>
 </header>
 {% endif %}
 <main class="container">
+  {% if session.uid and ROL != 'admin' %}
+    <div class="role-banner no-print">
+      🔒 Sesión iniciada como <b>{{ USER_EMAIL }}</b> (<b>Solo consulta</b>): puedes consultar e imprimir credenciales y reportes, pero no tienes permisos para registrar, modificar ni desactivar trabajadores.
+    </div>
+  {% endif %}
   {% for cat, msg in get_flashed_messages(with_categories=true) %}
     <div class="flash {{ cat }} no-print">{{ '✓' if cat == 'ok' else '!' }} {{ msg }}</div>
   {% endfor %}

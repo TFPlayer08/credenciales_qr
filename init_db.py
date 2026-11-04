@@ -16,6 +16,8 @@ cur.execute("USE credenciales_db")
 
 cur.execute("INSERT IGNORE INTO usuarios (email, password_hash) VALUES (%s,%s)",
             ("admin@empresa.com", generate_password_hash("Admin123!")))
+cur.execute("INSERT IGNORE INTO usuarios (email, password_hash, rol) VALUES (%s,%s,'consulta')",
+            ("consulta@novatech.com", generate_password_hash("Consulta123!")))
 
 cur.execute("SELECT COUNT(*) FROM trabajadores")
 if cur.fetchone()[0] == 0:
