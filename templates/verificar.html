@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Verificación{% endblock %}
+{% block content %}
+<section class="card verify">
+  {% if not c %}
+    <div class="status big notfound">✖ Credencial no encontrada</div>
+    <p class="muted">El código QR no corresponde a una credencial registrada.</p>
+  {% else %}
+    <div class="status big {{ c.estado|replace(' ','-')|lower }}">
+      {{ '✔' if c.estado == 'Vigente' else '✖' }} {{ c.estado }}
+    </div>
+    {% if c.foto_path %}<img class="avatar big" src="{{ url_for('static', filename='uploads/' ~ c.foto_path) }}" alt="">
+    {% else %}<div class="avatar big ph">{{ c.nombre_completo[0] }}</div>{% endif %}
+    <h2>{{ c.nombre_completo }}</h2>
+    <dl>
+      <dt>Nº de trabajador</dt><dd>{{ c.numero_trabajador }}</dd>
+      <dt>Área</dt><dd>{{ c.area }}</dd>
+      <dt>Cargo</dt><dd>{{ c.cargo }}</dd>
+      <dt>Nº de tarjeta</dt><dd>{{ c.numero_tarjeta }}</dd>
+      <dt>Vigencia</dt><dd>{{ c.fecha_inicio }} al {{ c.fecha_vencimiento }}</dd>
+      <dt>Estado</dt><dd>{{ c.estado }}</dd>
+    </dl>
+  {% endif %}
+</section>
+{% endblock %}

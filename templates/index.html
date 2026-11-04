@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="head">
+  <h1>Trabajadores <small>({{ rows|length }})</small></h1>
+  <a class="btn primary" href="{{ url_for('nuevo') }}">+ Nuevo trabajador</a>
+</div>
+<form class="filters" method="get">
+  <input type="search" name="q" value="{{ q }}" placeholder="Buscar nombre, nº trabajador o tarjeta">
+  <select name="estado">
+    <option value="">Todos los estados</option>
+    {% for e in ['Vigente','Inactiva','Vencida','No vigente'] %}
+      <option {{ 'selected' if e == estado }}>{{ e }}</option>
+    {% endfor %}
+  </select>
+  <button class="btn">Filtrar</button>
+</form>
+
+<div class="grid">
+{% for r in rows %}
+  <article class="card worker">
+    {% if r.foto_path %}<img class="avatar" src="{{ url_for('static', filename='uploads/' ~ r.foto_path) }}" alt="">
+    {% else %}<div class="avatar ph">{{ r.nombre_completo[0] }}</div>{% endif %}
+    <div class="info">
+      <h3>{{ r.nombre_completo }}</h3>
+      <p class="muted">{{ r.numero_trabajador }} · {{ r.numero_tarjeta }}</p>
+      <p>{{ r.area }} — {{ r.cargo }}</p>
+      <p class="muted">Vence: {{ r.fecha_vencimiento }}</p>
+      <span class="badge {{ r.estado|replace(' ','-')|lower }}">{{ r.estado }}</span>
+    </div>
+    <div class="actions">
+      <a class="btn sm" href="{{ url_for('credencial', cid=r.id) }}">Credencial</a>
+      <a class="btn sm" href="{{ url_for('editar', cid=r.id) }}">Editar</a>
+      <form method="post" action="{{ url_for('toggle', cid=r.id) }}">
+        <button class="btn sm {{ 'danger' if r.activa else 'ok' }}">{{ 'Desactivar' if r.activa else 'Activar' }}</button>
+      </form>
+    </div>
+  </article>
+{% else %}
+  <p class="muted">Sin resultados.</p>
+{% endfor %}
+</div>
+{% endblock %}

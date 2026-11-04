@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Credencial {{ c.numero_trabajador }}{% endblock %}
+{% block content %}
+<div class="head no-print">
+  <h1>Credencial <span class="badge {{ c.estado|replace(' ','-')|lower }}">{{ c.estado }}</span></h1>
+  <div class="row">
+    <button class="btn primary" onclick="window.print()">🖨 Imprimir</button>
+    <a class="btn" href="{{ url_for('index') }}">Volver</a>
+  </div>
+</div>
+{% include "_card.html" %}
+<section class="card no-print" style="margin-top:1rem">
+  <h3>Información registrada</h3>
+  <p>Edad: {{ t.edad }} · Sexo: {{ t.sexo }} · CURP: {{ t.curp }}</p>
+  <p>Emergencia: {{ t.emergencia_nombre }} ({{ t.emergencia_telefono }})</p>
+  <p>Vigencia: {{ c.fecha_inicio }} → {{ c.fecha_vencimiento }}</p>
+  <p>Enlace QR: <a href="{{ url_qr }}" target="_blank">{{ url_qr }}</a></p>
+</section>
+{% endblock %}

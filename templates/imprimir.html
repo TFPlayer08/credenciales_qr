@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Imprimir credenciales{% endblock %}
+{% block content %}
+<div class="head no-print">
+  <h1>Imprimir todas</h1>
+  <button class="btn primary" onclick="window.print()">🖨 Imprimir</button>
+</div>
+{% for c in rows %}{% include "_card.html" %}{% endfor %}
+{% endblock %}

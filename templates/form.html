@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Nuevo trabajador' if nuevo else 'Editar' }}{% endblock %}
+{% block content %}
+<h1>{{ 'Nuevo trabajador' if nuevo else 'Editar trabajador' }}</h1>
+<form method="post" enctype="multipart/form-data" class="card form">
+  <fieldset>
+    <legend>Datos personales</legend>
+    <label>Nombre completo<input name="nombre_completo" value="{{ w.nombre_completo }}" required></label>
+    <label>Edad<input type="number" name="edad" min="14" max="99" value="{{ w.edad }}" required></label>
+    <label>Sexo
+      <select name="sexo" required>
+        {% for s in ['M','F','Otro'] %}<option {{ 'selected' if w.sexo == s }}>{{ s }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>CURP<input name="curp" maxlength="18" minlength="18" value="{{ w.curp }}" style="text-transform:uppercase" required></label>
+    <label>Correo electrónico<input type="email" name="email" value="{{ w.email or '' }}"></label>
+    <label>Fotografía<input type="file" name="foto" accept="image/*" id="foto"></label>
+    <img id="preview" class="avatar big" {% if w.foto_path %}src="{{ url_for('static', filename='uploads/' ~ w.foto_path) }}"{% else %}hidden{% endif %} alt="">
+  </fieldset>
+  <fieldset>
+    <legend>Datos laborales</legend>
+    {% if nuevo %}<label>Nº de trabajador (vacío = automático)<input name="numero_trabajador" value="{{ w.numero_trabajador }}"></label>{% endif %}
+    <label>Área de adscripción<input name="area" value="{{ w.area }}" required></label>
+    <label>Cargo<input name="cargo" value="{{ w.cargo }}" required></label>
+  </fieldset>
+  <fieldset>
+    <legend>Contacto de emergencia</legend>
+    <label>Nombre<input name="emergencia_nombre" value="{{ w.emergencia_nombre }}" required></label>
+    <label>Teléfono<input type="tel" name="emergencia_telefono" value="{{ w.emergencia_telefono }}" required></label>
+  </fieldset>
+  <fieldset>
+    <legend>Credencial</legend>
+    <label>Nº de tarjeta (único)<input name="numero_tarjeta" value="{{ c.numero_tarjeta }}" required></label>
+    <label>Inicio de vigencia<input type="date" name="fecha_inicio" value="{{ c.fecha_inicio or hoy }}" required></label>
+    <label>Vencimiento<input type="date" name="fecha_vencimiento" value="{{ c.fecha_vencimiento }}" required></label>
+  </fieldset>
+  <div class="row">
+    <button class="btn primary">Guardar</button>
+    <a class="btn" href="{{ url_for('index') }}">Cancelar</a>
+  </div>
+</form>
+{% endblock %}
