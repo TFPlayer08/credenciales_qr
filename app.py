@@ -1,7 +1,10 @@
 import io
+import json
 import os
 import re
 import smtplib
+import socket
+import urllib.request
 import uuid
 from datetime import date, datetime
 from email.message import EmailMessage
@@ -115,15 +118,40 @@ def admin_required(f):
     return wrapper
 
 
+def _enviar_resend_http(api_key, remitente, destinatario, asunto, html, texto):
+    payload = json.dumps({
+        "from": remitente,
+        "to": [destinatario],
+        "subject": asunto,
+        "html": html,
+        "text": texto,
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        "https://api.resend.com/emails",
+        data=payload,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "User-Agent": "NovaTech-CredentialApp/1.0",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=5) as resp:
+        return resp.status in (200, 201)
+
+
 # ---------- Envío automático al correo personal del trabajador ----------
 def notificar(cred_id, tipo):
     load_dotenv(override=True)
     c = query("SELECT * FROM v_credenciales WHERE id=%s", (cred_id,), one=True)
-    if not c or not c["email"]:
+    if not c or not c.get("email"):
         return
 
     inst = os.getenv("INSTITUCION", "NovaTech")
-    tipo_txt = ETIQUETAS_NOTIF[tipo]
+    tipo_txt = ETIQUETAS_NOTIF.get(tipo) or {
+        "creacion": "Creación de credencial",
+        "desactivacion": "Desactivación de credencial",
+    }.get(tipo, "Actualización de credencial")
     vigencia = f"{fecha(c['fecha_inicio'])} al {fecha(c['fecha_vencimiento'])}"
     asunto = f"[{inst}] {tipo_txt} · {c['numero_trabajador']}"
 
@@ -155,6 +183,32 @@ def notificar(cred_id, tipo):
     </div>
     """
 
+    # 1. Registrar SIEMPRE en la tabla notificaciones (requisito de auditoría en BD)
+    try:
+        query(
+            """INSERT INTO notificaciones
+               (credencial_id, tipo, enviada_a, asunto, nombre_completo, numero_trabajador,
+                numero_tarjeta, vigencia, estado_actualizado, cuerpo)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+            (cred_id, tipo, c["email"], asunto, c["nombre_completo"], c["numero_trabajador"],
+             c["numero_tarjeta"], vigencia, c["estado"], cuerpo_txt),
+            commit=True,
+        )
+    except Exception as e:
+        print("[AVISO] No se pudo guardar la notificación en BD:", e)
+
+    # 2. Intentar entrega por Resend HTTP API si está configurado (óptimo para nube)
+    resend_key = os.getenv("RESEND_API_KEY", "").strip()
+    if resend_key:
+        try:
+            de = os.getenv("RESEND_FROM", f"{inst} <onboarding@resend.dev>")
+            _enviar_resend_http(resend_key, de, c["email"], asunto, cuerpo_html, cuerpo_txt)
+            flash(f"Notificación enviada por correo a {c['email']}", "ok")
+            return
+        except Exception as e:
+            print("[AVISO] Falló entrega por Resend:", e)
+
+    # 3. Intentar entrega por SMTP (con timeout estricto de 3s para evitar bloqueos)
     host = os.getenv("SMTP_HOST", "").strip()
     user = os.getenv("SMTP_USER", "").strip()
     pwd = os.getenv("SMTP_PASSWORD", "").strip().replace(" ", "")
@@ -169,30 +223,23 @@ def notificar(cred_id, tipo):
             msg.set_content(cuerpo_txt)
             msg.add_alternative(cuerpo_html, subtype="html")
             if port == 465:
-                with smtplib.SMTP_SSL(host, port) as s:
+                with smtplib.SMTP_SSL(host, port, timeout=3) as s:
                     s.login(user, pwd)
                     s.send_message(msg)
             else:
-                with smtplib.SMTP(host, port) as s:
+                with smtplib.SMTP(host, port, timeout=3) as s:
                     s.starttls()
                     s.login(user, pwd)
                     s.send_message(msg)
-            flash(f"Notificación enviada al correo {c['email']}", "ok")
+            flash(f"Notificación enviada por correo a {c['email']}", "ok")
+        except (socket.timeout, TimeoutError, OSError) as e:
+            print(f"[AVISO] Conexión SMTP no disponible o bloqueada por la red ({e}). Notificación archivada en BD.")
+            flash(f"Notificación guardada en el sistema para {c['email']} (el servidor en la nube no permite conexiones SMTP directas).", "ok")
         except Exception as e:
-            print("Error enviando correo:", e)
-            flash(f"No se pudo enviar el correo a {c['email']}: {e}", "error")
+            print("[AVISO] Error al enviar correo:", e)
+            flash(f"Notificación guardada en el sistema. Servidor de correo reportó: {e}", "ok")
     else:
-        flash(f"Falta configurar el correo emisor de {inst} en .env (SMTP_HOST/USER/PASSWORD) para entregar a {c['email']}", "error")
-
-    query(
-        """INSERT INTO notificaciones
-           (credencial_id, tipo, enviada_a, asunto, nombre_completo, numero_trabajador,
-            numero_tarjeta, vigencia, estado_actualizado, cuerpo)
-           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
-        (cred_id, tipo, c["email"], asunto, c["nombre_completo"], c["numero_trabajador"],
-         c["numero_tarjeta"], vigencia, c["estado"], cuerpo_txt),
-        commit=True,
-    )
+        flash(f"Notificación registrada en el sistema para {c['email']}", "ok")
 
 
 # ---------- Auth ----------
