@@ -22,6 +22,17 @@ app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "dev")
 app.config["MAX_CONTENT_LENGTH"] = 4 * 1024 * 1024
 UPLOADS = os.path.join(app.root_path, "static", "uploads")
+os.makedirs(UPLOADS, exist_ok=True)
+
+# Auto-inicializar la BD en el primer arranque si las tablas no existen
+def _auto_init_db():
+    try:
+        from init_db import inicializar_si_es_necesario
+        inicializar_si_es_necesario()
+    except Exception as e:
+        print("[AVISO] No se pudo auto-inicializar la base de datos:", e)
+
+_auto_init_db()
 EXT = {"png", "jpg", "jpeg", "webp"}
 CURP_RE = re.compile(r"^[A-Z]{4}\d{6}[A-Z0-9]{8}$")
 EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$")

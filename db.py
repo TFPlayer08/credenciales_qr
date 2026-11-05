@@ -6,13 +6,19 @@ load_dotenv()
 
 
 def get_conn(with_db=True):
+    host = os.getenv("DB_HOST") or os.getenv("MYSQLHOST") or "localhost"
+    user = os.getenv("DB_USER") or os.getenv("MYSQLUSER") or "root"
+    password = os.getenv("DB_PASSWORD") or os.getenv("MYSQLPASSWORD") or ""
+    port = int(os.getenv("DB_PORT") or os.getenv("MYSQLPORT") or 3306)
+
     cfg = dict(
-        host=os.getenv("DB_HOST", "localhost"),
-        user=os.getenv("DB_USER", "root"),
-        password=os.getenv("DB_PASSWORD", ""),
+        host=host,
+        user=user,
+        password=password,
+        port=port,
     )
     if with_db:
-        cfg["database"] = os.getenv("DB_NAME", "credenciales_db")
+        cfg["database"] = os.getenv("DB_NAME") or os.getenv("MYSQLDATABASE") or "credenciales_db"
     return mysql.connector.connect(**cfg)
 
 
