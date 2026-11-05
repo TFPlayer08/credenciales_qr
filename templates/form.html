@@ -1,65 +1,149 @@
 {% extends "base.html" %}
-{% block title %}{{ 'Nuevo trabajador' if nuevo else 'Editar' }}{% endblock %}
+{% block title %}{{ 'Nuevo trabajador' if nuevo else 'Editar trabajador' }}{% endblock %}
 {% block content %}
 <div class="page-head">
   <div>
     <h1>{{ 'Nuevo trabajador' if nuevo else 'Editar trabajador' }}</h1>
-    <p class="muted">{{ 'Al guardar se genera su credencial con QR único' if nuevo else 'Los cambios se reflejan al instante en la verificación QR' }}</p>
+    <p class="muted">{{ 'Todos los campos y la fotografía son validados antes de generar la credencial' if nuevo else 'Los cambios se reflejan al instante en la verificación QR (el N° de credencial es fijo)' }}</p>
   </div>
   <a class="btn" href="{{ url_for('index') }}">← Volver</a>
 </div>
-<form method="post" enctype="multipart/form-data" class="form">
+
+<form method="post" enctype="multipart/form-data" class="form" id="worker-form">
   <section class="card">
     <h2 class="sec"><span>👤</span> Datos personales</h2>
     <div class="fields">
-      <label class="wide">Nombre completo<input name="nombre_completo" value="{{ w.nombre_completo }}" required></label>
-      <label>Edad<input type="number" name="edad" min="14" max="99" value="{{ w.edad }}" required></label>
+      <label class="wide">Nombre completo (nombre y apellidos)
+        <input name="nombre_completo" value="{{ w.nombre_completo or '' }}" minlength="5" maxlength="150"
+               pattern="^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+(\s+[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+)+$"
+               title="Ingresa nombre y apellidos usando solo letras" placeholder="Ej. Ana López Martínez" required>
+      </label>
+      <label>Edad (18 a 99)
+        <input type="number" name="edad" min="18" max="99" value="{{ w.edad or '' }}" placeholder="Ej. 28" required>
+      </label>
       <label>Sexo
         <select name="sexo" required>
-          {% for s in ['M','F','Otro'] %}<option {{ 'selected' if w.sexo == s }}>{{ s }}</option>{% endfor %}
+          <option value="" disabled {{ 'selected' if not w.sexo }}>Selecciona...</option>
+          {% for s, txt in [('M','Masculino (M)'),('F','Femenino (F)'),('Indefinido','Indefinido')] %}
+            <option value="{{ s }}" {{ 'selected' if w.sexo == s }}>{{ txt }}</option>
+          {% endfor %}
         </select>
       </label>
-      <label>CURP<input name="curp" maxlength="18" minlength="18" value="{{ w.curp }}" style="text-transform:uppercase" required></label>
-      <label>Correo electrónico<input type="email" name="email" value="{{ w.email or '' }}" placeholder="trabajador@correo.com" required></label>
-    </div>
-    <div class="photo-up">
-      <img id="preview" class="avatar big" {% if w.foto_path %}src="{{ url_for('static', filename='uploads/' ~ w.foto_path) }}"{% else %}hidden{% endif %} alt="">
-      <label class="drop">📷 Fotografía del trabajador
-        <input type="file" name="foto" accept="image/*" id="foto">
-        <small>PNG, JPG o WEBP · máx. 4 MB</small>
+      <label>CURP (18 caracteres)
+        <input name="curp" id="curp" maxlength="18" minlength="18" value="{{ w.curp or '' }}"
+               style="text-transform:uppercase" placeholder="ABCD000101HDFRRNA1" required>
       </label>
+      <label>Correo electrónico personal
+        <input type="email" name="email" value="{{ w.email or '' }}" placeholder="trabajador@correo.com" required>
+      </label>
+    </div>
+
+    <div class="photo-up">
+      <div class="photo-frame">
+        <img id="preview" class="photo-preview-img"
+             {% if w.foto_path %}src="{{ url_for('static', filename='uploads/' ~ w.foto_path) }}"{% else %}hidden{% endif %} alt="Vista previa">
+        <div id="preview-empty" class="photo-empty" {% if w.foto_path %}hidden{% endif %}>
+          <span class="cam-ico">📷</span>
+          <small>Sin foto</small>
+        </div>
+      </div>
+
+      <div class="upload-box" id="dropzone">
+        <div class="upload-title">
+          <b>Fotografía del trabajador</b>
+          {% if nuevo %}<span class="req-pill">Obligatoria</span>{% else %}<span class="opt-pill">Opcional al editar</span>{% endif %}
+        </div>
+        <input type="file" name="foto" id="foto" class="sr-file"
+               accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" {{ 'required' if nuevo }}>
+        <div class="upload-controls">
+          <label for="foto" class="btn upload-btn">📁 Elegir fotografía</label>
+          <span id="file-name" class="file-name {{ 'ok' if w.foto_path }}">
+            {{ '✓ Fotografía actual conservada' if w.foto_path else 'Ningún archivo seleccionado' }}
+          </span>
+        </div>
+        <small class="upload-hint">Arrastra una imagen aquí o usa el botón · Formatos PNG, JPG o WEBP · Máximo 4 MB</small>
+      </div>
     </div>
   </section>
 
   <section class="card">
     <h2 class="sec"><span>💼</span> Datos laborales</h2>
     <div class="fields">
-      {% if nuevo %}<label>Nº de trabajador<input name="numero_trabajador" value="{{ w.numero_trabajador }}" placeholder="Vacío = automático"></label>{% endif %}
-      <label>Área de adscripción<input name="area" value="{{ w.area }}" required></label>
-      <label>Cargo<input name="cargo" value="{{ w.cargo }}" required></label>
+      {% if nuevo %}
+      <label>Nº de trabajador
+        <input name="numero_trabajador" value="{{ w.numero_trabajador or '' }}" maxlength="20"
+               pattern="^[A-Za-z0-9\-]{2,20}$" title="Solo letras, números y guiones"
+               placeholder="Vacío = automático (ej. T-0015)">
+      </label>
+      {% else %}
+      <label>🔒 Nº de trabajador (fijo)
+        <input value="{{ w.numero_trabajador or c.numero_trabajador }}" class="input-locked" readonly tabindex="-1">
+      </label>
+      {% endif %}
+
+      <label>Área de adscripción
+        <select name="area" required>
+          <option value="" disabled {{ 'selected' if not w.area }}>Selecciona un área...</option>
+          {% if w.area and w.area not in AREAS %}
+            <option value="{{ w.area }}" selected>{{ w.area }} (actual)</option>
+          {% endif %}
+          {% for a in AREAS %}
+            <option value="{{ a }}" {{ 'selected' if w.area == a }}>{{ a }}</option>
+          {% endfor %}
+        </select>
+      </label>
+
+      <label>Cargo o puesto
+        <input name="cargo" value="{{ w.cargo or '' }}" minlength="2" maxlength="100"
+               placeholder="Ej. Desarrollador, Contadora, Analista" required>
+      </label>
     </div>
   </section>
 
   <section class="card">
     <h2 class="sec"><span>🚑</span> Contacto de emergencia</h2>
     <div class="fields">
-      <label>Nombre<input name="emergencia_nombre" value="{{ w.emergencia_nombre }}" required></label>
-      <label>Teléfono<input type="tel" name="emergencia_telefono" value="{{ w.emergencia_telefono }}" required></label>
+      <label>Nombre completo del contacto
+        <input name="emergencia_nombre" value="{{ w.emergencia_nombre or '' }}" minlength="3" maxlength="150"
+               pattern="^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+(\s+[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+)*$"
+               title="Solo letras y espacios" placeholder="Ej. María Torres" required>
+      </label>
+      <label>Teléfono de emergencia (10 dígitos)
+        <input type="tel" name="emergencia_telefono" id="emergencia_telefono" value="{{ w.emergencia_telefono or '' }}"
+               minlength="10" maxlength="14" pattern="^[\d\s\-\(\)]{10,14}$"
+               title="Ingresa los 10 dígitos del número telefónico" placeholder="Ej. 9611234567" required>
+      </label>
     </div>
   </section>
 
   <section class="card">
     <h2 class="sec"><span>🪪</span> Credencial</h2>
     <div class="fields">
-      <label>Nº de tarjeta (único)<input name="numero_tarjeta" value="{{ c.numero_tarjeta }}" required></label>
-      <label>Inicio de vigencia<input type="date" name="fecha_inicio" value="{{ c.fecha_inicio or hoy }}" required></label>
-      <label>Vencimiento<input type="date" name="fecha_vencimiento" value="{{ c.fecha_vencimiento }}" required></label>
+      {% if nuevo %}
+      <label>Nº de credencial / tarjeta (único)
+        <input name="numero_tarjeta" value="{{ c.numero_tarjeta or '' }}" minlength="3" maxlength="30"
+               pattern="^[A-Za-z0-9\-]{3,30}$" title="3 a 30 caracteres: letras, números o guiones"
+               placeholder="Ej. TJ-1015" required>
+      </label>
+      {% else %}
+      <label>🔒 Nº de credencial / tarjeta (no modificable)
+        <input name="numero_tarjeta" value="{{ c.numero_tarjeta }}" class="input-locked" readonly tabindex="-1">
+        <small class="lock-hint">El número de credencial no puede modificarse una vez creada.</small>
+      </label>
+      {% endif %}
+
+      <label>Inicio de vigencia
+        <input type="date" name="fecha_inicio" id="fecha_inicio" value="{{ c.fecha_inicio or hoy }}" required>
+      </label>
+      <label>Fecha de vencimiento
+        <input type="date" name="fecha_vencimiento" id="fecha_vencimiento" value="{{ c.fecha_vencimiento or '' }}" required>
+      </label>
     </div>
   </section>
 
   <div class="form-actions">
     <a class="btn" href="{{ url_for('index') }}">Cancelar</a>
-    <button class="btn primary lg">Guardar</button>
+    <button class="btn primary lg" type="submit">{{ 'Crear trabajador y credencial' if nuevo else 'Guardar cambios' }}</button>
   </div>
 </form>
 {% endblock %}

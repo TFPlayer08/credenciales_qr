@@ -3,3 +3,4 @@ mysql-connector-python
 qrcode[pil]
 python-dotenv
 reportlab
+gunicorn

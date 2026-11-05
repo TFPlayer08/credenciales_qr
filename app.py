@@ -23,7 +23,25 @@ app.secret_key = os.getenv("SECRET_KEY", "dev")
 app.config["MAX_CONTENT_LENGTH"] = 4 * 1024 * 1024
 UPLOADS = os.path.join(app.root_path, "static", "uploads")
 EXT = {"png", "jpg", "jpeg", "webp"}
-CURP_RE = re.compile(r"^[A-Z0-9]{18}$")
+CURP_RE = re.compile(r"^[A-Z]{4}\d{6}[A-Z0-9]{8}$")
+EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$")
+NOMBRE_RE = re.compile(r"^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+(?:\s+[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+)+$")
+SOLO_LETRAS_RE = re.compile(r"^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+(?:\s+[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+)*$")
+CODIGO_RE = re.compile(r"^[A-Za-z0-9\-]{2,30}$")
+
+AREAS_ADSCRIPCION = [
+    "Dirección",
+    "Administración",
+    "Recursos Humanos",
+    "Finanzas",
+    "Sistemas",
+    "Soporte",
+    "Operaciones",
+    "Marketing",
+    "Logística",
+    "Ventas",
+    "Jurídico",
+]
 
 ETIQUETAS_NOTIF = {
     "generada": "Creación de credencial",
@@ -44,7 +62,14 @@ def inject():
         "INSTITUCION": os.getenv("INSTITUCION", "NovaTech"),
         "ROL": rol or "admin",
         "USER_EMAIL": email_usr or "",
+        "AREAS": AREAS_ADSCRIPCION,
     }
+
+
+@app.errorhandler(413)
+def archivo_muy_grande(_e):
+    flash("La fotografía supera el tamaño máximo permitido de 4 MB.", "error")
+    return redirect(request.referrer or url_for("index"))
 
 
 @app.template_filter("fecha")
@@ -199,25 +224,118 @@ def index():
     return render_template("index.html", rows=rows, q=q, estado=estado, stats=stats, total=sum(stats.values()))
 
 
-def _guardar_foto():
+def _guardar_foto(obligatoria=False):
+    from PIL import Image as PILImage, UnidentifiedImageError
     f = request.files.get("foto")
-    if f and f.filename:
-        ext = f.filename.rsplit(".", 1)[-1].lower()
-        if ext not in EXT:
-            raise ValueError("La foto debe ser PNG, JPG o WEBP")
-        name = f"{uuid.uuid4().hex}.{ext}"
-        f.save(os.path.join(UPLOADS, secure_filename(name)))
-        return name
-    return None
+    if not f or not f.filename:
+        if obligatoria:
+            raise ValueError("Debes subir la fotografía del trabajador")
+        return None
+    if "." not in f.filename:
+        raise ValueError("La fotografía debe tener formato PNG, JPG o WEBP")
+    ext = f.filename.rsplit(".", 1)[-1].lower()
+    if ext not in EXT:
+        raise ValueError("La fotografía debe ser PNG, JPG o WEBP")
+    try:
+        img = PILImage.open(f.stream)
+        img.verify()
+        f.stream.seek(0)
+        img2 = PILImage.open(f.stream)
+        w, h = img2.size
+        if w < 50 or h < 50:
+            raise ValueError("La fotografía es demasiado pequeña (mínimo 50x50 píxeles)")
+        f.stream.seek(0)
+    except UnidentifiedImageError:
+        raise ValueError("El archivo seleccionado no es una imagen válida")
+    name = f"{uuid.uuid4().hex}.{ext}"
+    f.save(os.path.join(UPLOADS, secure_filename(name)))
+    return name
 
 
-def _validar(form):
-    curp = form["curp"].strip().upper()
-    if not CURP_RE.match(curp):
-        raise ValueError("La CURP debe tener 18 caracteres alfanuméricos")
-    if form["fecha_vencimiento"] < form["fecha_inicio"]:
-        raise ValueError("El vencimiento no puede ser anterior al inicio")
-    return curp
+def _validar(form, nuevo=True, w_actual=None, c_actual=None):
+    nombre = " ".join(form.get("nombre_completo", "").split())
+    if len(nombre) < 5 or not NOMBRE_RE.match(nombre):
+        raise ValueError("Ingresa el nombre completo del trabajador (nombre y apellidos, solo letras)")
+
+    try:
+        edad = int(form.get("edad", ""))
+    except ValueError:
+        raise ValueError("La edad debe ser un número entero válido")
+    if not (18 <= edad <= 99):
+        raise ValueError("La edad del trabajador debe estar entre 18 y 99 años")
+
+    sexo = form.get("sexo", "")
+    if sexo not in ("M", "F", "Otro"):
+        raise ValueError("Selecciona una opción válida para el sexo")
+
+    curp = form.get("curp", "").strip().upper()
+    curp_sin_cambio = w_actual and curp == w_actual.get("curp")
+    if not curp_sin_cambio and not CURP_RE.match(curp):
+        raise ValueError("La CURP debe tener 18 caracteres válidos (4 letras iniciales + 6 dígitos de fecha + 8 caracteres)")
+    dup_curp = query("SELECT id FROM trabajadores WHERE curp=%s", (curp,), one=True)
+    if dup_curp and (nuevo or dup_curp["id"] != w_actual["id"]):
+        raise ValueError("La CURP ingresada ya pertenece a otro trabajador registrado")
+
+    email = form.get("email", "").strip().lower()
+    if not email or not EMAIL_RE.match(email):
+        raise ValueError("Ingresa un correo electrónico válido para el trabajador")
+
+    area = form.get("area", "").strip()
+    if area not in AREAS_ADSCRIPCION and not (w_actual and area == w_actual.get("area")):
+        raise ValueError("Selecciona un área de adscripción válida de la lista")
+
+    cargo = " ".join(form.get("cargo", "").split())
+    if len(cargo) < 2 or not re.search(r"[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]{2}", cargo):
+        raise ValueError("Ingresa un cargo o puesto válido")
+
+    em_nom = " ".join(form.get("emergencia_nombre", "").split())
+    if len(em_nom) < 3 or not SOLO_LETRAS_RE.match(em_nom):
+        raise ValueError("El nombre del contacto de emergencia solo debe contener letras (mínimo 3 caracteres)")
+
+    em_tel = re.sub(r"[\s\-\(\)]", "", form.get("emergencia_telefono", ""))
+    if not re.match(r"^\d{10}$", em_tel):
+        raise ValueError("El teléfono de emergencia debe tener exactamente 10 dígitos numéricos")
+
+    try:
+        ini = date.fromisoformat(form.get("fecha_inicio", ""))
+        ven = date.fromisoformat(form.get("fecha_vencimiento", ""))
+    except ValueError:
+        raise ValueError("Ingresa fechas válidas de inicio y vencimiento")
+    if ven < ini:
+        raise ValueError("La fecha de vencimiento no puede ser anterior a la fecha de inicio")
+
+    num_trab = form.get("numero_trabajador", "").strip()
+    num_tarj = form.get("numero_tarjeta", "").strip()
+
+    if nuevo:
+        if num_trab:
+            if not CODIGO_RE.match(num_trab):
+                raise ValueError("El N° de trabajador solo admite letras, números y guiones (2 a 20 caracteres)")
+            if query("SELECT 1 FROM trabajadores WHERE numero_trabajador=%s", (num_trab,), one=True):
+                raise ValueError("El N° de trabajador ya está asignado a otra persona")
+        if len(num_tarj) < 3 or not CODIGO_RE.match(num_tarj):
+            raise ValueError("El N° de credencial/tarjeta debe tener entre 3 y 30 caracteres (letras, números o guiones)")
+        if query("SELECT 1 FROM credenciales WHERE numero_tarjeta=%s", (num_tarj,), one=True):
+            raise ValueError("El N° de credencial/tarjeta ya existe; no se permiten duplicados")
+    else:
+        if num_tarj and num_tarj != c_actual["numero_tarjeta"]:
+            raise ValueError("El N° de credencial no se puede modificar una vez creada")
+
+    return {
+        "nombre_completo": nombre,
+        "edad": edad,
+        "sexo": sexo,
+        "curp": curp,
+        "email": email,
+        "area": area,
+        "cargo": cargo,
+        "emergencia_nombre": em_nom,
+        "emergencia_telefono": em_tel,
+        "numero_trabajador": num_trab,
+        "numero_tarjeta": num_tarj if nuevo else c_actual["numero_tarjeta"],
+        "fecha_inicio": str(ini),
+        "fecha_vencimiento": str(ven),
+    }
 
 
 def _siguiente_numero():
@@ -233,22 +351,22 @@ def nuevo():
     if request.method == "POST":
         f = request.form
         try:
-            curp = _validar(f)
-            foto = _guardar_foto()
+            d = _validar(f, nuevo=True)
+            foto = _guardar_foto(obligatoria=True)
             tid = query(
                 """INSERT INTO trabajadores (numero_trabajador,nombre_completo,edad,sexo,curp,area,cargo,
                    foto_path,email,emergencia_nombre,emergencia_telefono)
                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
-                (f["numero_trabajador"].strip() or _siguiente_numero(), f["nombre_completo"], f["edad"],
-                 f["sexo"], curp, f["area"], f["cargo"], foto, f["email"].strip() or None,
-                 f["emergencia_nombre"], f["emergencia_telefono"]), commit=True)
+                (d["numero_trabajador"] or _siguiente_numero(), d["nombre_completo"], d["edad"],
+                 d["sexo"], d["curp"], d["area"], d["cargo"], foto, d["email"],
+                 d["emergencia_nombre"], d["emergencia_telefono"]), commit=True)
             cid = query(
                 """INSERT INTO credenciales (trabajador_id,numero_tarjeta,qr_token,fecha_inicio,fecha_vencimiento)
                    VALUES (%s,%s,%s,%s,%s)""",
-                (tid, f["numero_tarjeta"].strip(), str(uuid.uuid4()), f["fecha_inicio"],
-                 f["fecha_vencimiento"]), commit=True)
+                (tid, d["numero_tarjeta"], str(uuid.uuid4()), d["fecha_inicio"],
+                 d["fecha_vencimiento"]), commit=True)
             notificar(cid, "generada")
-            flash("Trabajador y credencial creados", "ok")
+            flash("Trabajador y credencial creados correctamente", "ok")
             return redirect(url_for("credencial", cid=cid))
         except mysql.connector.IntegrityError:
             flash("Número de tarjeta, número de trabajador o CURP duplicado", "error")
@@ -266,23 +384,29 @@ def editar(cid):
     if request.method == "POST":
         f = request.form
         try:
-            curp = _validar(f)
-            foto = _guardar_foto() or w["foto_path"]
+            d = _validar(f, nuevo=False, w_actual=w, c_actual=c)
+            foto = _guardar_foto(obligatoria=False) or w["foto_path"]
             query(
                 """UPDATE trabajadores SET nombre_completo=%s,edad=%s,sexo=%s,curp=%s,area=%s,cargo=%s,
                    foto_path=%s,email=%s,emergencia_nombre=%s,emergencia_telefono=%s WHERE id=%s""",
-                (f["nombre_completo"], f["edad"], f["sexo"], curp, f["area"], f["cargo"], foto,
-                 f["email"].strip() or None, f["emergencia_nombre"], f["emergencia_telefono"], w["id"]), commit=True)
-            query("UPDATE credenciales SET numero_tarjeta=%s,fecha_inicio=%s,fecha_vencimiento=%s WHERE id=%s",
-                  (f["numero_tarjeta"].strip(), f["fecha_inicio"], f["fecha_vencimiento"], cid), commit=True)
-            if str(c["fecha_vencimiento"]) != f["fecha_vencimiento"]:
+                (d["nombre_completo"], d["edad"], d["sexo"], d["curp"], d["area"], d["cargo"], foto,
+                 d["email"], d["emergencia_nombre"], d["emergencia_telefono"], w["id"]), commit=True)
+            query("UPDATE credenciales SET fecha_inicio=%s,fecha_vencimiento=%s WHERE id=%s",
+                  (d["fecha_inicio"], d["fecha_vencimiento"], cid), commit=True)
+            if str(c["fecha_vencimiento"]) != d["fecha_vencimiento"]:
                 notificar(cid, "vencimiento_modificado")
-            flash("Cambios guardados", "ok")
+            flash("Cambios guardados correctamente", "ok")
             return redirect(url_for("index"))
         except mysql.connector.IntegrityError:
-            flash("Número de tarjeta o CURP duplicado", "error")
+            flash("La CURP ingresada ya existe en otro trabajador", "error")
         except ValueError as e:
             flash(str(e), "error")
+        w_vista = dict(f)
+        w_vista["foto_path"] = w["foto_path"]
+        w_vista["numero_trabajador"] = w["numero_trabajador"]
+        c_vista = dict(f)
+        c_vista["numero_tarjeta"] = c["numero_tarjeta"]
+        return render_template("form.html", w=w_vista, c=c_vista, nuevo=False)
     return render_template("form.html", w=w, c=c, nuevo=False)
 
 
