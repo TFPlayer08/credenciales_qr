@@ -118,6 +118,30 @@ def admin_required(f):
     return wrapper
 
 
+def _enviar_gmail_webhook(webhook_url, remitente_nombre, destinatario_email, asunto, html, texto):
+    payload = json.dumps({
+        "to": destinatario_email,
+        "subject": asunto,
+        "html": html,
+        "text": texto,
+        "name": remitente_nombre,
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        webhook_url,
+        data=payload,
+        headers={
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        body = resp.read().decode("utf-8", errors="ignore").strip()
+        if body == "OK":
+            return True
+        raise RuntimeError(f"Respuesta inesperada del puente Gmail: {body[:120]}")
+
+
 def _enviar_brevo_http(api_key, remitente_email, remitente_nombre, destinatario_email, destinatario_nombre, asunto, html, texto):
     payload = json.dumps({
         "sender": {"name": remitente_nombre, "email": remitente_email},
@@ -228,7 +252,17 @@ def notificar(cred_id, tipo):
     except Exception as e:
         print("[AVISO] No se pudo guardar la notificación en BD:", e)
 
-    # 2. Intentar entrega por Brevo HTTP API (permite entregar a CUALQUIER correo del mundo por HTTPS)
+    # 2. Intentar entrega por Puente HTTPS de Gmail (Google Apps Script - envía a CUALQUIER correo sin bloqueos)
+    gmail_webhook = os.getenv("GMAIL_WEBHOOK_URL", "").strip()
+    if gmail_webhook:
+        try:
+            if _enviar_gmail_webhook(gmail_webhook, inst, c["email"], asunto, cuerpo_html, cuerpo_txt):
+                flash(f"Notificación enviada por correo a {c['email']}", "ok")
+                return
+        except Exception as e:
+            print("[AVISO] Falló entrega por GMAIL_WEBHOOK_URL:", e)
+
+    # 3. Intentar entrega por Brevo HTTP API (permite entregar a CUALQUIER correo del mundo por HTTPS)
     brevo_key = os.getenv("BREVO_API_KEY", "").strip()
     if brevo_key:
         try:
