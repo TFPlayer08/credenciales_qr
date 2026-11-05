@@ -118,6 +118,29 @@ def admin_required(f):
     return wrapper
 
 
+def _enviar_brevo_http(api_key, remitente_email, remitente_nombre, destinatario_email, destinatario_nombre, asunto, html, texto):
+    payload = json.dumps({
+        "sender": {"name": remitente_nombre, "email": remitente_email},
+        "to": [{"email": destinatario_email, "name": destinatario_nombre}],
+        "subject": asunto,
+        "htmlContent": html,
+        "textContent": texto,
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        "https://api.brevo.com/v3/smtp/email",
+        data=payload,
+        headers={
+            "api-key": api_key,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=8) as resp:
+        return resp.status in (200, 201)
+
+
 def _enviar_resend_http(api_key, remitente, destinatario, asunto, html, texto):
     for destino in [destinatario, "l23270596@tuxtla.tecnm.mx"]:
         payload = json.dumps({
@@ -205,7 +228,18 @@ def notificar(cred_id, tipo):
     except Exception as e:
         print("[AVISO] No se pudo guardar la notificación en BD:", e)
 
-    # 2. Intentar entrega por Resend HTTP API si está configurado (óptimo para nube)
+    # 2. Intentar entrega por Brevo HTTP API (permite entregar a CUALQUIER correo del mundo por HTTPS)
+    brevo_key = os.getenv("BREVO_API_KEY", "").strip()
+    if brevo_key:
+        try:
+            remitente = os.getenv("BREVO_SENDER_EMAIL") or os.getenv("SMTP_USER") or "marroquindorian@gmail.com"
+            if _enviar_brevo_http(brevo_key, remitente, inst, c["email"], c["nombre_completo"], asunto, cuerpo_html, cuerpo_txt):
+                flash(f"Notificación entregada por correo a {c['email']}", "ok")
+                return
+        except Exception as e:
+            print("[AVISO] Falló entrega por Brevo:", e)
+
+    # 3. Intentar entrega por Resend HTTP API si está configurado (óptimo para nube)
     resend_key = os.getenv("RESEND_API_KEY", "").strip()
     if resend_key:
         try:
