@@ -1,16 +1,20 @@
 # 🪪 NovaTech · Sistema de Credencialización Web con Código QR (Reto 3)
 
-Sistema web responsivo para administrar trabajadores, generar credenciales digitales e imprimibles en formato horizontal (anverso y reverso) con código QR único, verificar su autenticidad y vigencia en tiempo real desde dispositivos móviles, emitir reportes en PDF y enviar notificaciones automáticas por correo electrónico.
+Sistema web responsivo desarrollado con **Python (Flask)** y base de datos relacional **SQL (MySQL)** para administrar trabajadores, generar credenciales digitales e imprimibles en formato horizontal (anverso y reverso) con código QR único, verificar su autenticidad y vigencia en tiempo real desde dispositivos móviles, emitir reportes en PDF y enviar notificaciones automáticas por correo electrónico.
+
+🌐 **Demo en vivo (Producción 24/7 en Railway):** [https://web-production-a9c0c.up.railway.app](https://web-production-a9c0c.up.railway.app)
+- **Administrador:** `admin@empresa.com` / `Admin123!`
+- **Solo consulta:** `consulta@novatech.com` / `Consulta123!`
 
 ---
 
 ## 🛠️ Tecnologías utilizadas
-- **Backend:** Python 3.10+ con **Flask**
-- **Base de datos:** **MySQL 8.0** / MariaDB (`mysql-connector-python`)
+- **Backend:** Python 3.10+ con **Flask** y **Gunicorn** (producción)
+- **Base de datos SQL:** **MySQL 8.0** / MariaDB (`mysql-connector-python`) con esquema relacional en [`database/schema.sql`](database/schema.sql)
 - **Frontend:** HTML5, CSS3 responsivo (adaptable a PC, tablet y celular) y JavaScript
-- **Códigos QR e imágenes:** `qrcode` y `Pillow`
-- **Generación de PDFs:** `reportlab` (reportes y credenciales listas para imprimir)
-- **Notificaciones por correo:** `smtplib` / `email.message` (protocolo SMTP TLS/SSL)
+- **Códigos QR e imágenes:** `qrcode` y `Pillow` (validación real de imagen y dimensiones)
+- **Generación de PDFs:** `reportlab` (reportes ejecutivos y credenciales vectoriales listas para imprimir)
+- **Notificaciones por correo:** Híbrido **HTTPS Webhook (Google Apps Script)** para entornos cloud y **SMTP TLS/SSL (`smtplib`)** para entorno local, con auditoría persistente en SQL (`notificaciones`)
 
 ---
 
@@ -132,10 +136,25 @@ Abre en tu navegador: **http://localhost:5000**
 
 ---
 
-## ✉️ Cómo activar el envío de correos reales (opcional)
-Si dejas `SMTP_HOST` vacío, el sistema funciona normalmente y registra las notificaciones en la tabla `notificaciones` de MySQL sin requerir credenciales de correo.
+## 🗄️ Arquitectura de Base de Datos SQL (`database/schema.sql`)
+El sistema utiliza una base de datos relacional **SQL (MySQL)** compuesta por 4 tablas y 1 vista dinámica:
+1. **`usuarios`**: Cuentas de acceso con contraseñas cifradas (`password_hash`) y rol (`admin` o `consulta`).
+2. **`trabajadores`**: Datos personales y laborales (`numero_trabajador`, `nombre_completo`, `edad`, `sexo`, `curp` única, `area`, `cargo`, `foto_path`, `email`, contacto de emergencia).
+3. **`credenciales`**: Relación `1:N` con `trabajadores` (`numero_tarjeta` único, `qr_token` único UUID, `fecha_inicio`, `fecha_vencimiento`, bandera `activa`).
+4. **`notificaciones`**: Bitácora de auditoría SQL que almacena cada notificación emitida (`credencial_id`, `tipo`, `enviada_a`, `asunto`, `vigencia`, `estado_actualizado`, `cuerpo` y `enviada_en`).
+5. **Vista SQL `v_credenciales`**: Calcula en tiempo real el estado (`Vigente`, `Inactiva`, `Vencida`, `No vigente`) comparando `CURDATE()` contra `fecha_inicio`, `fecha_vencimiento` y `activa`.
 
-Si deseas que los correos lleguen a las bandejas reales (`@gmail.com`, `@outlook.com`, etc.) de los trabajadores registrados:
+> **Auto-inicialización:** Al iniciar `app.py`, el sistema verifica automáticamente si las tablas existen en MySQL; si la base de datos está vacía, ejecuta `init_db.py` de forma transparente para crear las tablas, la vista y los registros de demostración.
+
+---
+
+## ✉️ Cómo activar el envío de correos reales (opcional)
+Todas las notificaciones se guardan siempre en la tabla SQL `notificaciones`. Además, para entregar correos reales a la bandeja de cualquier trabajador:
+
+### Opción A — En la nube (Railway / Hosting sin puertos SMTP):
+Configura la variable `GMAIL_WEBHOOK_URL` apuntando a un Web App de **Google Apps Script** (`MailApp.sendEmail`), el cual envía correos desde tu cuenta Gmail por **HTTPS (puerto 443)** a cualquier destinatario sin bloqueos de red.
+
+### Opción B — En entorno local (SMTP directo):
 1. En una cuenta Gmail emisora, activa la *Verificación en 2 pasos* y genera una **Contraseña de aplicación** de 16 letras en https://myaccount.google.com/apppasswords.
 2. Completa en tu `.env` local:
    ```ini
@@ -150,13 +169,14 @@ Si deseas que los correos lleguen a las bandejas reales (`@gmail.com`, `@outlook
 ## 📁 Estructura del proyecto
 ```text
 ├── app.py                  # Servidor Flask, rutas, autenticación, roles, QR y correos
-├── db.py                   # Conexión a MySQL mediante variables de entorno
-├── init_db.py              # Creación automática de BD, tablas, usuarios demo y 10 trabajadores
+├── db.py                   # Conexión a MySQL (soporta variables locales DB_* y Railway MYSQL*)
+├── init_db.py              # Creación automática de BD, tablas SQL, usuarios demo y 10 trabajadores
 ├── crear_admin.py          # Utilidad CLI para crear usuarios admin o de solo consulta
 ├── reporte_pdf.py          # Generador de PDFs con ReportLab (reportes y credenciales A4)
+├── Procfile                # Configuración de servidor Gunicorn para producción en Railway
 ├── requirements.txt        # Dependencias de Python
 ├── database/
-│   └── schema.sql          # Esquema SQL completo y vista v_credenciales
+│   └── schema.sql          # Esquema SQL completo (4 tablas relacionales + vista v_credenciales)
 ├── templates/              # Plantillas HTML (Jinja2)
 │   ├── base.html           # Barra de navegación, indicador de rol y alertas
 │   ├── login.html          # Pantalla de acceso
